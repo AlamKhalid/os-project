@@ -30,7 +30,7 @@ int getAllProc()
     FILE *fp;
     int i = 0, tok_num = 0, run = 1;
     char output[500], *token;
-    fp = popen("ps au", "r");
+    fp = popen("ps aux --sort=-pcpu", "r");
     while (fgets(output, sizeof(output), fp))
     {
         if (!i)
@@ -71,7 +71,8 @@ int getAllProc()
             ++tok_num;
             token = strtok(NULL, " ");
         }
-        fileOutput();
+        if(process.cpu > 0 || process.mem > 0)
+            fileOutput();
         wrote = 1;
     }
     pclose(fp);
