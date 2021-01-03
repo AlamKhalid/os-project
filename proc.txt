@@ -1,0 +1,13 @@
+923 alam 0.0 0.1 /usr/lib/gdm3/gdm-x-session
+925 alam 0.7 4.4 /usr/lib/xorg/Xorg
+1013 alam 0.0 0.3 /usr/libexec/gnome-session-binary
+3605 alam 0.0 0.1 bash
+3639 alam 0.0 0.1 bash
+3652 alam 0.3 6.8 /usr/lib/firefox/firefox
+3850 alam 0.0 3.4 /usr/lib/firefox/firefox
+3895 alam 0.0 2.7 /usr/lib/firefox/firefox
+3939 alam 0.0 2.1 /usr/lib/firefox/firefox
+4204 alam 0.0 0.1 bash
+5400 alam 0.0 0.0 ./task
+5548 alam 0.0 0.0 sh
+5549 alam 0.0 0.0 ps
