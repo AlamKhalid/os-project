@@ -355,26 +355,70 @@ int threadedSendReceiveTasks()
     return 1;
 }
 
+int receiveCPUUsage()
+{
+    //  alam code
+    //  update value float
+    //  update label string
+
+    printf("CPU Bufgfer hweh\n");
+    float value = 50;
+    char usage[5];
+    pushIntoCircularQueue(circCPU, &circCPUFront, &circCPURear, value);
+    sprintf(cpuBuffer, "%0.1f%s", value, "%");
+    gtk_widget_queue_draw(graphCPU);
+
+    gtk_label_set_text(cpuusage, "25%");
+    return 1;
+}
+
+int threadedSendReceiveCPU()
+{
+    printf("runCPU?\n");
+    receiveCPUUsage();
+    return 1;
+}
+
+int receiveMemUsage()
+{
+    printf("Mem Bufgfer hweh\n");
+    float value = 75;
+    char usage[5];
+    pushIntoCircularQueue(circMem, &circMemFront, &circMemRear, value);
+    sprintf(memBuffer, "%0.1f%s", value, "%");
+    gtk_widget_queue_draw(graphMem);
+
+    gtk_label_set_text(memusage, "100%");
+
+    return 1;
+}
+
+int threadedSendReceiveMem()
+{
+    printf("runMem?\n");
+    //gdk_threads_enter();
+    // strcpy(memBuffer, "free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'");
+    receiveMemUsage();
+    return 1;
+}
+
 void *socketSetupThreadFunction()
 {
     printf("in socket thread\n");
     receiveDataAndCreateTasks(taskBuffer);
     // strcpy(cpuBuffer, "top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f\",100-$1);}\'");
-    // sendMessageOverCPUSocket(cpuSock, cpuBuffer);
-    // receiveCPUUsage(cpuSock, cpuBuffer);
+    receiveCPUUsage();
     // strcpy(memBuffer, "free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'");
-    // sendMessageOverMemSocket(memSock, memBuffer);
-    // receiveMemUsage(memSock, memBuffer);
+    receiveMemUsage();
 
     g_timeout_add_seconds(refreshRate, threadedSendReceiveTasks, NULL);
-    // g_timeout_add_seconds(refreshRate, threadedSendReceiveCPU, NULL);
-    // g_timeout_add_seconds(refreshRate, threadedSendReceiveMem, NULL);
+    g_timeout_add_seconds(refreshRate, threadedSendReceiveCPU, NULL);
+    g_timeout_add_seconds(refreshRate, threadedSendReceiveMem, NULL);
 }
 
-void startConnection()
+void startFunction()
 {
     printf("in start connection\n");
-    // gtk_widget_set_sensitive(window, FALSE);
     GtkWidget *content_area;
 
     GThread *startLoadingWindowThread, *startSetupSocketThread;
@@ -388,32 +432,6 @@ void startConnection()
     }
 
     g_thread_join(startSetupSocketThread);
-}
-
-void createNewConnectionWindow(GtkWidget *widget, gpointer data)
-{
-    printf("in one cahahha\n");
-    //SETTING UP NEW CONNECTION WINDOW
-    // gtk_widget_set_sensitive(window, FALSE);
-
-    startConnection();
-
-    // new_connection_cancel = gtk_builder_get_object(new_connection_ui, "cancel-button");
-    // g_signal_connect(new_connection_cancel, "clicked", G_CALLBACK(closeNewConnectionWindow), new_connection_window);
-
-    // content_area = gtk_dialog_get_content_area(GTK_DIALOG(new_connection_window));
-    // //gtk_widget_reparent(box,GTK_CONTAINER(content_area));
-    // gtk_container_add(GTK_CONTAINER(content_area), box);
-
-    // g_signal_connect(new_connection_window, "destroy", G_CALLBACK(closeNewConnectionWindow), new_connection_window);
-    // gtk_window_set_title(new_connection_window, "Create New Connection");
-    // gtk_window_set_skip_taskbar_hint(new_connection_window, TRUE);
-    // gtk_window_set_resizable(GTK_WINDOW(new_connection_window), FALSE);
-
-    // gtk_widget_show_all(new_connection_window);
-
-    //gtk_widget_grab_focus(GTK_WIDGET(new_connection_window));
-    //SETTING UP NEW CONNECTION WINDOW ends.
 }
 
 int main(int argc, char *argv[])
@@ -453,9 +471,6 @@ int main(int argc, char *argv[])
     // * label for cpu and memory usage
     cpuusage = gtk_builder_get_object(builder, "cpu-usage-label");
     memusage = gtk_builder_get_object(builder, "mem-usage-label");
-
-    gtk_label_set_text(cpuusage, "15%");
-    gtk_label_set_text(memusage, "25%");
 
     graphCPU = (gtk_builder_get_object(builder, "cpuGraphArea"));
     g_signal_connect(graphCPU, "draw", G_CALLBACK(drawCPUGraph), NULL);
@@ -533,7 +548,7 @@ int main(int argc, char *argv[])
     // gtk_main();
     // gdk_threads_leave();
 
-    createNewConnectionWindow(NULL, NULL);
+    startFunction();
     GThread *mainThread;
     mainThread = g_thread_create(mainCallBack, NULL, TRUE, NULL);
     g_thread_join(mainThread);
