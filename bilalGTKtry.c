@@ -55,7 +55,7 @@ int alwaysOnTop = 0;
 char taskBuffer[512], memBuffer[512], cpuBuffer[512], runBuffer[512];
 char taskCommand[512];
 int currSort = 1;
-int refreshRate = 20;
+int refreshRate = 1;
 int refreshStop = 0;
 int countTask = 0, countCPU = 0, countMem = 0;
 
@@ -322,22 +322,29 @@ void pushIntoCircularQueue(int circular[], int *front, int *rear, int value)
 
 int receiveDataAndCreateTasks(char *buffer)
 {
-    printf("hey!\n");
     char command[100], pid[50], cpu[50], mem[50], user[80];
     int i = 0, j = 0;
+    char cmd[] = "whoami | xargs top -b -n 1 -u | awk '{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}' | sort -k 1";
+	FILE *fp;
+	if ((fp = popen(cmd, "r")) == NULL)
+	{
+		printf("Error opening pipe");
+	}
+	while (fgets(taskBuffer, 512, fp))
+	{
+		sscanf(taskBuffer, "%s%s%s%s%s", command, pid, cpu, mem, user);
+        gtk_label_set_text(taskData[i][0], command);
+        gtk_label_set_text(taskData[i][1], pid);
+        gtk_label_set_text(taskData[i][2], cpu);
+        gtk_label_set_text(taskData[i][3], mem);
+        gtk_label_set_text(taskData[i][4], user);
 
-    // while (strcmp(buffer, "DONE") != 0)
-    // {
-    // sscanf(buffer, "%s%s%s%s%s", command, pid, cpu, mem, user);
-    gtk_label_set_text(taskData[i][0], "bash");
-    gtk_label_set_text(taskData[i][1], "250");
-    gtk_label_set_text(taskData[i][2], "45");
-    gtk_label_set_text(taskData[i][3], "23");
-    gtk_label_set_text(taskData[i][4], "bilalalfzal");
+        gtk_widget_show(GTK_WIDGET(tempOut[i]));
+        i++;
+	}
+    
 
-    gtk_widget_show(GTK_WIDGET(tempOut[i]));
-    i++;
-    // }
+    
 
     for (; i < 200; i++)
     {
@@ -349,7 +356,6 @@ int receiveDataAndCreateTasks(char *buffer)
 
 int threadedSendReceiveTasks()
 {
-    printf("runTasks?\n");
     receiveDataAndCreateTasks(taskBuffer);
     return 1;
 }
@@ -376,7 +382,6 @@ int receiveCPUUsage()
 
 int threadedSendReceiveCPU()
 {
-    printf("runCPU?\n");
     receiveCPUUsage();
     return 1;
 }
@@ -396,14 +401,13 @@ int receiveMemUsage()
     sprintf(memBuffer, "%0.1f%s", value, "%");
     gtk_widget_queue_draw(graphMem);
 
-    gtk_label_set_text(memusage, "100%");
+    gtk_label_set_text(memusage, memBuffer);
 
     return 1;
 }
 
 int threadedSendReceiveMem()
 {
-    printf("runMem?\n");
     //gdk_threads_enter();
     // strcpy(memBuffer, "free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'");
     receiveMemUsage();
@@ -412,7 +416,6 @@ int threadedSendReceiveMem()
 
 void *socketSetupThreadFunction()
 {
-    printf("in socket thread\n");
     receiveDataAndCreateTasks(taskBuffer);
     // strcpy(cpuBuffer, "top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f\",100-$1);}\'");
     receiveCPUUsage();
@@ -426,7 +429,6 @@ void *socketSetupThreadFunction()
 
 void startFunction()
 {
-    printf("in start connection\n");
     GtkWidget *content_area;
 
     GThread *startLoadingWindowThread, *startSetupSocketThread;
