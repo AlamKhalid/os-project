@@ -17,6 +17,12 @@ int circCPU[12], circMem[12];
 int circCPUFront = -1, circMemFront = -1;
 int circCPURear = -1, circMemRear = -1;
 
+//Variables for New-Connection.
+GtkBuilder *new_connection_ui;
+GObject *new_connection_window, *new_connection_okay, *new_connection_cancel;
+GObject *refresh_window, *refresh_okay, *refresh_cancel;
+GObject *task_window, *task_okay, *task_cancel;
+
 //  * gtk builder
 GtkBuilder *builder;
 //  * outer window objects
@@ -315,6 +321,101 @@ void pushIntoCircularQueue(int circular[], int *front, int *rear, int value)
     circular[*front] = value;
 }
 
+int receiveDataAndCreateTasks(char *buffer)
+{
+    printf("hey!\n");
+    char command[100], pid[50], cpu[50], mem[50], user[80];
+    int i = 0, j = 0;
+
+    // while (strcmp(buffer, "DONE") != 0)
+    // {
+    // sscanf(buffer, "%s%s%s%s%s", command, pid, cpu, mem, user);
+    gtk_label_set_text(taskData[i][0], "bash");
+    gtk_label_set_text(taskData[i][1], "250");
+    gtk_label_set_text(taskData[i][2], "45");
+    gtk_label_set_text(taskData[i][3], "23");
+    gtk_label_set_text(taskData[i][4], "bilalalfzal");
+
+    gtk_widget_show(GTK_WIDGET(tempOut[i]));
+    i++;
+    // }
+
+    for (; i < 200; i++)
+    {
+        gtk_widget_hide(GTK_WIDGET(tempOut[i]));
+    }
+
+    return 1;
+}
+
+int threadedSendReceiveTasks()
+{
+    printf("runTasks?\n");
+    receiveDataAndCreateTasks(taskBuffer);
+    return 1;
+}
+
+void *socketSetupThreadFunction()
+{
+    printf("in socket thread\n");
+    receiveDataAndCreateTasks(taskBuffer);
+    // strcpy(cpuBuffer, "top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f\",100-$1);}\'");
+    // sendMessageOverCPUSocket(cpuSock, cpuBuffer);
+    // receiveCPUUsage(cpuSock, cpuBuffer);
+    // strcpy(memBuffer, "free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'");
+    // sendMessageOverMemSocket(memSock, memBuffer);
+    // receiveMemUsage(memSock, memBuffer);
+
+    g_timeout_add_seconds(refreshRate, threadedSendReceiveTasks, NULL);
+    // g_timeout_add_seconds(refreshRate, threadedSendReceiveCPU, NULL);
+    // g_timeout_add_seconds(refreshRate, threadedSendReceiveMem, NULL);
+}
+
+void startConnection()
+{
+    printf("in start connection\n");
+    // gtk_widget_set_sensitive(window, FALSE);
+    GtkWidget *content_area;
+
+    GThread *startLoadingWindowThread, *startSetupSocketThread;
+    GError *err1 = NULL;
+    GError *err2 = NULL;
+
+    if ((startSetupSocketThread = g_thread_create((GThreadFunc)socketSetupThreadFunction, NULL, TRUE, &err2)) == NULL)
+    {
+        printf("Thread create failed: %s\n", err2->message);
+        g_error_free(err2);
+    }
+
+    g_thread_join(startSetupSocketThread);
+}
+
+void createNewConnectionWindow(GtkWidget *widget, gpointer data)
+{
+    printf("in one cahahha\n");
+    //SETTING UP NEW CONNECTION WINDOW
+    // gtk_widget_set_sensitive(window, FALSE);
+
+    startConnection();
+
+    // new_connection_cancel = gtk_builder_get_object(new_connection_ui, "cancel-button");
+    // g_signal_connect(new_connection_cancel, "clicked", G_CALLBACK(closeNewConnectionWindow), new_connection_window);
+
+    // content_area = gtk_dialog_get_content_area(GTK_DIALOG(new_connection_window));
+    // //gtk_widget_reparent(box,GTK_CONTAINER(content_area));
+    // gtk_container_add(GTK_CONTAINER(content_area), box);
+
+    // g_signal_connect(new_connection_window, "destroy", G_CALLBACK(closeNewConnectionWindow), new_connection_window);
+    // gtk_window_set_title(new_connection_window, "Create New Connection");
+    // gtk_window_set_skip_taskbar_hint(new_connection_window, TRUE);
+    // gtk_window_set_resizable(GTK_WINDOW(new_connection_window), FALSE);
+
+    // gtk_widget_show_all(new_connection_window);
+
+    //gtk_widget_grab_focus(GTK_WIDGET(new_connection_window));
+    //SETTING UP NEW CONNECTION WINDOW ends.
+}
+
 int main(int argc, char *argv[])
 {
     int i = 0;
@@ -352,6 +453,9 @@ int main(int argc, char *argv[])
     // * label for cpu and memory usage
     cpuusage = gtk_builder_get_object(builder, "cpu-usage-label");
     memusage = gtk_builder_get_object(builder, "mem-usage-label");
+
+    gtk_label_set_text(cpuusage, "15%");
+    gtk_label_set_text(memusage, "25%");
 
     graphCPU = (gtk_builder_get_object(builder, "cpuGraphArea"));
     g_signal_connect(graphCPU, "draw", G_CALLBACK(drawCPUGraph), NULL);
@@ -422,11 +526,19 @@ int main(int argc, char *argv[])
 
     gtk_widget_show(box);
     gtk_widget_show(scrolledWindow);
-    GThread *mainThread;
-    mainThread = g_thread_new(NULL, mainCallBack, NULL);
-    g_thread_join(mainThread);
-    gtk_main();
+
+    // GThread *mainThread;
+    // mainThread = g_thread_new(NULL, mainCallBack, NULL);
+    // g_thread_join(mainThread);
+    // gtk_main();
     // gdk_threads_leave();
+
+    createNewConnectionWindow(NULL, NULL);
+    GThread *mainThread;
+    mainThread = g_thread_create(mainCallBack, NULL, TRUE, NULL);
+    g_thread_join(mainThread);
+    //gtk_main();
+    gdk_threads_leave();
 
     return 0;
 }
