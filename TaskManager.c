@@ -7,6 +7,8 @@
 #include <netinet/in.h>
 #include <pthread.h>
 #include <semaphore.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <cairo.h>
 
 sem_t mutexTask;
@@ -45,9 +47,7 @@ GtkWidget *box, *tempIn[200], *tempOut[200];
 GtkWidget *but[200], *taskData[200][5];
 GtkWidget *sortCommand, *sortPID, *sortCPU, *sortMem, *sortUser;
 
-int alwaysOnTop = 0;
-char taskBuffer[512], memBuffer[512], cpuBuffer[512], runBuffer[512];
-char taskCommand[512];
+char taskBuffer[512];
 int currSort = 1;
 int refreshRate = 2;
 int refreshStop = 0;
@@ -324,18 +324,17 @@ void pushIntoCircularQueue(int circular[], int *front, int *rear, int value)
     circular[*front] = value;
 }
 
-int receiveDataAndCreateTasks(char cmd[])
+int receiveDataAndCreateTasks()
 {
-    char command[100], pid[50], cpu[50], mem[50], user[80];
+    char command[100], pid[50], cpu[50], mem[50], user[80], *token;
     int i = 0, j = 0;
-    FILE *fp;
-    if ((fp = popen(cmd, "r")) == NULL)
+    key_t key = ftok("taskfile", 75);
+    int shmid = shmget(key, 32768, 0666 | IPC_CREAT);
+    char *str = (char *)shmat(shmid, (void *)0, 0);
+    token = strtok(str, "\n");
+    while (token)
     {
-        printf("Error opening pipe");
-    }
-    while (fgets(taskBuffer, 512, fp))
-    {
-        sscanf(taskBuffer, "%s%s%s%s%s", command, pid, cpu, mem, user);
+        sscanf(token, "%s%s%s%s%s", command, pid, cpu, mem, user);
         if (strcmp(command, "sh") != 0 && i < 200)
         {
             gtk_label_set_text(taskData[i][0], command);
@@ -347,41 +346,37 @@ int receiveDataAndCreateTasks(char cmd[])
             gtk_widget_show(GTK_WIDGET(tempOut[i]));
             i++;
         }
+        token = strtok(NULL, "\n");
     }
-
     for (; i < 200; i++)
     {
         gtk_widget_hide(GTK_WIDGET(tempOut[i]));
     }
-
+    shmdt(str);
+    shmctl(shmid, IPC_RMID, NULL);
     return 1;
 }
 
 int threadedSendReceiveTasks()
 {
-    char cmd[] = "whoami | xargs top -b -n 1 -u | awk '{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}' | sort -k 1";
-    receiveDataAndCreateTasks(cmd);
+    receiveDataAndCreateTasks();
     return 1;
 }
 
 int receiveCPUUsage()
 {
-    char cmd[] = "top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk \'{printf(\"%0.1f\",100-$1);}\'";
-    FILE *fp;
-    if ((fp = popen(cmd, "r")) == NULL)
-    {
-        printf("Error opening pipe!\n");
-    }
-    while (fgets(cpuBuffer, 512, fp) != NULL)
-        ;
-
-    float value = atof(cpuBuffer);
+    key_t key = ftok("cpufile", 65);
+    int shmid = shmget(key, 32, 0666 | IPC_CREAT);
+    char *str = (char *)shmat(shmid, (void *)0, 0);
+    float value = atof(str);
     char usage[5];
     pushIntoCircularQueue(circCPU, &circCPUFront, &circCPURear, value);
-    sprintf(cpuBuffer, "%0.1f%s", value, "%");
+    sprintf(str, "%0.1f%s", value, "%");
     gtk_widget_queue_draw(graphCPU);
 
-    gtk_label_set_text(cpuusage, cpuBuffer);
+    gtk_label_set_text(cpuusage, str);
+    shmdt(str);
+    shmctl(shmid, IPC_RMID, NULL);
     return 1;
 }
 
@@ -393,22 +388,18 @@ int threadedSendReceiveCPU()
 
 int receiveMemUsage()
 {
-    char cmd[] = "free -m | grep Mem | awk \'{printf(\"%0.1f\",$3/$2*100)}\'";
-    FILE *fp;
-    if ((fp = popen(cmd, "r")) == NULL)
-    {
-        printf("Error opening pipe!\n");
-    }
-    while (fgets(memBuffer, 512, fp) != NULL)
-        ;
-    float value = atof(memBuffer);
+    key_t key = ftok("memfile", 70);
+    int shmid = shmget(key, 32, 0666 | IPC_CREAT);
+    char *str = (char *)shmat(shmid, (void *)0, 0);
+    float value = atof(str);
     char usage[5];
     pushIntoCircularQueue(circMem, &circMemFront, &circMemRear, value);
-    sprintf(memBuffer, "%0.1f%s", value, "%");
+    sprintf(str, "%0.1f%s", value, "%");
     gtk_widget_queue_draw(graphMem);
 
-    gtk_label_set_text(memusage, memBuffer);
-
+    gtk_label_set_text(memusage, str);
+    shmdt(str);
+    shmctl(shmid, IPC_RMID, NULL);
     return 1;
 }
 
@@ -445,86 +436,6 @@ void startFunction()
     }
 
     g_thread_join(startSetupThread);
-}
-
-void sortByCommand()
-{
-    char cmd[512];
-    if (currSort == 1)
-    {
-        currSort = -1;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1 -r");
-    }
-    else
-    {
-        currSort = 1;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 1");
-    }
-    receiveDataAndCreateTasks(cmd);
-}
-
-void sortByPID()
-{
-    char cmd[512];
-    if (currSort == 2)
-    {
-        currSort = -2;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 2 -r");
-    }
-    else
-    {
-        currSort = 2;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 2");
-    }
-    receiveDataAndCreateTasks(cmd);
-}
-
-void sortByCPU()
-{
-    char cmd[512];
-    if (currSort == 3)
-    {
-        currSort = -3;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 3 -r");
-    }
-    else
-    {
-        currSort = 3;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 3");
-    }
-    receiveDataAndCreateTasks(cmd);
-}
-
-void sortByMem()
-{
-    char cmd[512];
-    if (currSort == 4)
-    {
-        currSort = -4;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 4 -r");
-    }
-    else
-    {
-        currSort = 4;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 4");
-    }
-    receiveDataAndCreateTasks(cmd);
-}
-
-void sortByUser()
-{
-    char cmd[512];
-    if (currSort == 5)
-    {
-        currSort = -5;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 5 -r");
-    }
-    else
-    {
-        currSort = 5;
-        strcpy(cmd, "whoami | xargs top -b -n 1 -u | awk \'{if(NR>7)printf \"%-s %6s %-4s %-4s %-4s\\n\",$NF,$1,$9,$10,$2}\' | sort -k 5");
-    }
-    receiveDataAndCreateTasks(cmd);
 }
 
 int main(int argc, char *argv[])
@@ -572,21 +483,6 @@ int main(int argc, char *argv[])
     g_signal_connect(graphMem, "draw", G_CALLBACK(drawMemGraph), NULL);
 
     gtk_widget_show_all(window);
-
-    sortCommand = gtk_builder_get_object(builder, "process_name");
-    g_signal_connect(sortCommand, "clicked", G_CALLBACK(sortByCommand), NULL);
-
-    sortPID = gtk_builder_get_object(builder, "process_pid");
-    g_signal_connect(sortPID, "clicked", G_CALLBACK(sortByPID), NULL);
-
-    sortCPU = gtk_builder_get_object(builder, "process_cpu");
-    g_signal_connect(sortCPU, "clicked", G_CALLBACK(sortByCPU), NULL);
-
-    sortMem = gtk_builder_get_object(builder, "process_memory");
-    g_signal_connect(sortMem, "clicked", G_CALLBACK(sortByMem), NULL);
-
-    sortUser = gtk_builder_get_object(builder, "process_user");
-    g_signal_connect(sortUser, "clicked", G_CALLBACK(sortByUser), NULL);
 
     vp = GTK_WIDGET(gtk_builder_get_object(builder, "process-add-box"));
     box = gtk_box_new(TRUE, 0);
