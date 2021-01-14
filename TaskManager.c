@@ -49,7 +49,7 @@ GtkWidget *sortCommand, *sortPID, *sortCPU, *sortMem, *sortUser;
 
 char taskBuffer[512];
 int currSort = 1;
-int refreshRate = 2;
+int refreshRate = 3;
 int refreshStop = 0;
 int countTask = 0, countCPU = 0, countMem = 0;
 
